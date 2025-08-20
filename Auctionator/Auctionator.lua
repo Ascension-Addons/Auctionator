@@ -183,8 +183,6 @@ function Atr_SetupHookFunctionsEarly ()
 	auctionator_orig_FriendsFrame_OnEvent = FriendsFrame_OnEvent;
 	FriendsFrame_OnEvent = Atr_FriendsFrame_OnEvent;
 
-	Atr_Hook_OnTooltipAddMoney ();
-
 end
 
 
@@ -482,8 +480,7 @@ function Atr_OnLoad()
 		AUCTIONATOR_SCAN_MINLEVEL = 1;			-- poor (all) items
 	end
 
-	if (AUCTIONATOR_SHOW_TIPS == 0) then		-- migrate old option to new ones
-		AUCTIONATOR_V_TIPS = 0;
+	if (AUCTIONATOR_SHOW_TIPS == 0) then
 		AUCTIONATOR_A_TIPS = 0;
 		AUCTIONATOR_D_TIPS = 0;
 

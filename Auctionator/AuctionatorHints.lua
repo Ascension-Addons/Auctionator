@@ -9,22 +9,6 @@ local auctionator_orig_GameTooltip_OnTooltipAddMoney;
 
 -----------------------------------------
 
-function auctionator_GameTooltip_OnTooltipAddMoney (self, cost, maxcost)
-
-	if (AUCTIONATOR_V_TIPS == 1) then
-		return;
-	end
-
-	auctionator_orig_GameTooltip_OnTooltipAddMoney (self, cost, maxcost);
-end
-
------------------------------------------
-
-function Atr_Hook_OnTooltipAddMoney()
-	auctionator_orig_GameTooltip_OnTooltipAddMoney = GameTooltip_OnTooltipAddMoney;
-	GameTooltip_OnTooltipAddMoney = auctionator_GameTooltip_OnTooltipAddMoney;
-end
-
 ------------------------------------------------
 
 local function Atr_AppendHint (results, price, text, volume)
@@ -759,7 +743,6 @@ local function ShowTipWithPricing (tip, link, num, enchantID)
 	local dePrice		= nil;
 	local enchantPrice = 0;
 
-	if (AUCTIONATOR_V_TIPS == 1) then vendorPrice	= itemVendorPrice; end;
 	if (AUCTIONATOR_A_TIPS == 1) then auctionPrice	= Atr_GetAuctionPrice (itemName); end;
 	if (AUCTIONATOR_D_TIPS == 1) then dePrice		= Atr_CalcDisenchantPrice (itemType, itemRarity, itemLevel); end;
 
@@ -779,12 +762,6 @@ local function ShowTipWithPricing (tip, link, num, enchantID)
 
 	if (vendorPrice == nil) then
 		vendorPrice = 0;
-	end
-
-	-- vendor info
-	if (AUCTIONATOR_V_TIPS == 1 and vendorPrice > 0) then
-		local vpadding = Atr_CalcTTpadding (vendorPrice, auctionPrice);
-		tip:AddDoubleLine (ZT("Vendor")..xstring, "|cFFFFFFFF"..zc.priceToMoneyString (vendorPrice))
 	end
 
 	-- auction info

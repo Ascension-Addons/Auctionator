@@ -240,13 +240,6 @@
 
 
 		<Frames>
-			<Frame name="ATR_tipsVendorOpt" inherits="Atr_SingleOptionTemplate">
-				<Anchors><Anchor point="TOPLEFT"><Offset><AbsDimension x="20" y="-45"/></Offset></Anchor></Anchors>
-				<Scripts>
-					<OnLoad>	ATR_tipsVendorOpt_CB_Text:SetText (ZT("Show vendor prices in tooltips"));	</OnLoad>
-				</Scripts>
-			</Frame>
-
 			<Frame name="ATR_tipsAuctionOpt" inherits="Atr_SingleOptionTemplate">
 				<Anchors><Anchor point="TOPLEFT"><Offset><AbsDimension x="20" y="-70"/></Offset></Anchor></Anchors>
 				<Scripts>
