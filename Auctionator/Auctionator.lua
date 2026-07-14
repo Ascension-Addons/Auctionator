@@ -147,6 +147,7 @@ function Atr_RegisterEvents(self)
 
 	self:RegisterEvent("NEW_AUCTION_UPDATE");
 	self:RegisterEvent("CHAT_MSG_ADDON");
+	self:RegisterEvent("UI_ERROR_MESSAGE");
 	self:RegisterEvent("WHO_LIST_UPDATE");
 	self:RegisterEvent("PLAYER_ENTERING_WORLD");
 
@@ -171,6 +172,7 @@ function Atr_EventHandler()
 	if (event == "AUCTION_HOUSE_CLOSED")		then	Atr_OnAuctionHouseClosed(); 	end;
 	if (event == "NEW_AUCTION_UPDATE")			then	Atr_OnNewAuctionUpdate(); 		end;
 	if (event == "CHAT_MSG_ADDON")				then	Atr_OnChatMsgAddon(); 			end;
+	if (event == "UI_ERROR_MESSAGE")			then	if (Atr_Buy_OnErrorMessage) then Atr_Buy_OnErrorMessage(arg1); end end;
 	if (event == "WHO_LIST_UPDATE")				then	Atr_OnWhoListUpdate(); 			end;
 	if (event == "PLAYER_ENTERING_WORLD")		then	Atr_OnPlayerEnteringWorld(); 	end;
 
@@ -1252,6 +1254,10 @@ end
 function auctionator_ChatFrame_OnEvent(self, event, ...)
 
 	if (event == "CHAT_MSG_SYSTEM") then
+		if (Atr_Buy_OnErrorMessage) then
+			Atr_Buy_OnErrorMessage(arg1);
+		end
+
 		if (arg1 == ERR_AUCTION_STARTED) then		-- absorb the Auction Created message
 			return;
 		end

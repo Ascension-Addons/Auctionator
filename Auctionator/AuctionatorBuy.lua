@@ -10,6 +10,7 @@ local ATR_BUY_PROCESSING_QUERY_RESULTS	= 3;
 local ATR_BUY_WAITING_FOR_AH_CAN_SEND	= 4;
 
 local Atr_BuyState = ATR_BUY_NULL;
+local ATR_BUY_POST_BUY_DELAY			= 1;
 
 -----------------------------------------
 
@@ -23,6 +24,258 @@ local gAtr_Buy_CurPage;
 local gAtr_Buy_Waiting_Start;
 local gAtr_Buy_Query;
 local gAtr_Buy_Pass;
+local gAtr_Buy_Session_NumBought		= 0;
+local gAtr_Buy_Session_TotalSpent		= 0;
+local gAtr_Buy_PendingBuy				= nil;
+
+-----------------------------------------
+
+local function Atr_Buy_IsChainChecked()
+
+	return (Atr_Buy_Chain_CB and Atr_Buy_Chain_CB:GetChecked());
+
+end
+
+-----------------------------------------
+
+local function Atr_Buy_IsBuyableData(data)
+
+	return (data and data.type == "n" and not data.yours and not data.altname and data.buyoutPrice > 0);
+
+end
+
+-----------------------------------------
+
+local function Atr_Buy_CoinString(val)
+
+	local gold, silver, copper = zc.val2gsc(val);
+	local goldIcon		= "|TInterface\\MoneyFrame\\UI-GoldIcon:12:12:2:0|t";
+	local silverIcon	= "|TInterface\\MoneyFrame\\UI-SilverIcon:12:12:2:0|t";
+	local copperIcon	= "|TInterface\\MoneyFrame\\UI-CopperIcon:12:12:2:0|t";
+	local st = "";
+
+	if (gold > 0) then
+		st = gold..goldIcon.." "..format("%02i", silver)..silverIcon.." "..format("%02i", copper)..copperIcon;
+	elseif (silver > 0) then
+		st = silver..silverIcon.." "..format("%02i", copper)..copperIcon;
+	else
+		st = copper..copperIcon;
+	end
+
+	return st;
+
+end
+
+-----------------------------------------
+
+local function Atr_Buy_UpdateSessionText()
+
+	if (not Atr_Buy_Session_Text) then
+		return;
+	end
+
+	if (gAtr_Buy_Session_NumBought > 0) then
+		Atr_Buy_Session_Text:SetText ("Bought x"..gAtr_Buy_Session_NumBought.." for "..Atr_Buy_CoinString(gAtr_Buy_Session_TotalSpent));
+	else
+		Atr_Buy_Session_Text:SetText ("");
+	end
+
+end
+
+-----------------------------------------
+
+local function Atr_Buy_AddBackToScan(itemName, stackSize, buyoutPrice, howMany)
+
+	if (howMany == nil) then
+		howMany = 1;
+	end
+
+	local scan = Atr_FindScan (itemName);
+
+	scan:AddScanItem (itemName, stackSize, buyoutPrice, nil, howMany);
+	scan:CondenseAndSort ();
+
+	local currentPane = Atr_GetCurrentPane();
+	if (currentPane) then
+		currentPane.UINeedsUpdate = true;
+	end
+
+end
+
+-----------------------------------------
+
+local function Atr_Buy_ClearPendingBuy()
+
+	gAtr_Buy_PendingBuy = nil;
+
+end
+
+-----------------------------------------
+
+local function Atr_Buy_TrackPendingBuy(numAuctions)
+
+	gAtr_Buy_PendingBuy = {
+		itemName	= gAtr_Buy_ItemName;
+		stackSize	= gAtr_Buy_StackSize;
+		buyoutPrice	= gAtr_Buy_BuyoutPrice;
+		numAuctions	= numAuctions;
+		itemsPerAuction	= gAtr_Buy_StackSize;
+		spentPerAuction	= gAtr_Buy_BuyoutPrice;
+		when		= time();
+	};
+
+end
+
+-----------------------------------------
+
+function Atr_Buy_OnErrorMessage(msg)
+
+	if (not gAtr_Buy_PendingBuy or not msg) then
+		return false;
+	end
+
+	local msgLC = string.lower(msg);
+
+	if (time() - gAtr_Buy_PendingBuy.when > 5) then
+		Atr_Buy_ClearPendingBuy();
+		return false;
+	end
+
+	if (not (string.find(msgLC, "item was not found", 1, true) or string.find(msgLC, "item not found", 1, true))) then
+		return false;
+	end
+
+	gAtr_Buy_Session_NumBought = math.max(0, gAtr_Buy_Session_NumBought - gAtr_Buy_PendingBuy.itemsPerAuction);
+	gAtr_Buy_Session_TotalSpent = math.max(0, gAtr_Buy_Session_TotalSpent - gAtr_Buy_PendingBuy.spentPerAuction);
+	gAtr_Buy_NumBought = math.max(0, gAtr_Buy_NumBought - 1);
+	gAtr_Buy_PendingBuy.numAuctions = gAtr_Buy_PendingBuy.numAuctions - 1;
+
+	Atr_Buy_AddBackToScan(gAtr_Buy_PendingBuy.itemName, gAtr_Buy_PendingBuy.stackSize, gAtr_Buy_PendingBuy.buyoutPrice, 1);
+	Atr_Buy_UpdateSessionText();
+
+	if (gAtr_Buy_PendingBuy.numAuctions <= 0) then
+		Atr_Buy_ClearPendingBuy();
+	end
+
+	return true;
+
+end
+
+-----------------------------------------
+
+local function Atr_Buy_ResetSession()
+
+	gAtr_Buy_Session_NumBought = 0;
+	gAtr_Buy_Session_TotalSpent = 0;
+	Atr_Buy_ClearPendingBuy();
+	Atr_Buy_UpdateSessionText();
+
+end
+
+-----------------------------------------
+
+local function Atr_Buy_ShowLoadingState()
+
+	Atr_Buy_Confirm_OKBut:SetText (ZT("Buy"))
+	Atr_Buy_Confirm_OKBut:Disable();
+	Atr_Buy_UpdateSessionText();
+
+	if (Atr_Buy_IsChainChecked()) then
+		Atr_Buy_Continue_Text:SetText ("Refreshing auctions...");
+		Atr_Buy_Part1:Hide();
+		Atr_Buy_Part2:Show();
+	end
+
+end
+
+-----------------------------------------
+
+local function Atr_Buy_ShowCurrentSelection()
+
+	local currentPane = Atr_GetCurrentPane();
+	local scan = currentPane.activeScan;
+	local data = scan.sortedData[currentPane.currIndex];
+
+	gAtr_Buy_Query			= Atr_NewQuery();
+	gAtr_Buy_NumUserWants	= -1;
+	gAtr_Buy_NumBought		= 0;
+	
+	gAtr_Buy_BuyoutPrice	= data.buyoutPrice;
+	gAtr_Buy_ItemName		= scan.itemName;
+	gAtr_Buy_StackSize		= data.stackSize;
+	gAtr_Buy_MaxCanBuy		= data.count;
+	gAtr_Buy_Pass			= 1;		-- - first pass
+	
+	Atr_Buy_Confirm_ItemName:SetText (gAtr_Buy_ItemName.." x"..gAtr_Buy_StackSize);
+	Atr_Buy_Confirm_Numstacks:SetNumber (1);
+	Atr_Buy_Confirm_Max_Text:SetText (ZT("max")..": "..gAtr_Buy_MaxCanBuy);
+	Atr_Buy_UpdateSessionText();
+	
+	Atr_Buy_Part1:Show();
+	Atr_Buy_Part2:Hide();
+	
+	Atr_Buy_Confirm_OKBut:SetText (ZT("Buy"))
+	Atr_Buy_Confirm_OKBut:Disable();
+	Atr_Buy_Confirm_Frame:Show();
+
+	Atr_HighlightEntry(currentPane.currIndex);
+
+	if (scan.searchWasExact and data.minpage ~= nil) then
+		Atr_Buy_QueueQuery(data.minpage);
+	else
+		Atr_Buy_QueueQuery(0);
+	end
+
+end
+
+-----------------------------------------
+
+function Atr_Buy_ChainAdvance()
+
+	if (not Atr_Buy_IsChainChecked()) then
+		return false;
+	end
+
+	local currentPane = Atr_GetCurrentPane();
+	local scan = currentPane.activeScan;
+	local startIndex = currentPane.currIndex or 0;
+	local x;
+
+	for x = startIndex, #scan.sortedData do
+		local data = scan.sortedData[x];
+
+		if (Atr_Buy_IsBuyableData(data) and (data.stackSize ~= gAtr_Buy_StackSize or data.buyoutPrice ~= gAtr_Buy_BuyoutPrice)) then
+			currentPane.currIndex = x;
+			Atr_Buy_ShowCurrentSelection();
+			return true;
+		end
+	end
+
+	return false;
+
+end
+
+-----------------------------------------
+
+function Atr_Buy_ChainContinue()
+
+	if (not Atr_Buy_IsChainChecked()) then
+		return false;
+	end
+
+	local currentPane = Atr_GetCurrentPane();
+	local scan = currentPane.activeScan;
+	local data = scan.sortedData[currentPane.currIndex];
+	local boughtRequestedQty = (gAtr_Buy_NumUserWants ~= -1 and gAtr_Buy_NumBought > 0 and gAtr_Buy_NumUserWants <= gAtr_Buy_NumBought);
+
+	if (boughtRequestedQty and gAtr_Buy_NumBought < gAtr_Buy_MaxCanBuy and Atr_Buy_IsBuyableData(data) and data.stackSize == gAtr_Buy_StackSize and data.buyoutPrice == gAtr_Buy_BuyoutPrice and data.count > 0) then
+		Atr_Buy_ShowCurrentSelection();
+		return true;
+	end
+
+	return Atr_Buy_ChainAdvance();
+
+end
 
 -----------------------------------------
 
@@ -49,6 +302,7 @@ end
 function Atr_ClearBuyState()
 
 	Atr_BuyState = ATR_BUY_NULL;
+	Atr_Buy_ClearPendingBuy();
 
 end
 
@@ -61,39 +315,8 @@ function Atr_Buy1_Onclick ()
 		return;
 	end
 	
-	gAtr_Buy_Query			= Atr_NewQuery();
-	gAtr_Buy_NumUserWants	= -1;
-	gAtr_Buy_NumBought		= 0;
-	
-	local currentPane = Atr_GetCurrentPane();
-	
-	local scan = currentPane.activeScan;
-	
-	local data = scan.sortedData[currentPane.currIndex];
-
-	gAtr_Buy_BuyoutPrice	= data.buyoutPrice;
-	gAtr_Buy_ItemName		= scan.itemName;
-	gAtr_Buy_StackSize		= data.stackSize;
-	gAtr_Buy_MaxCanBuy		= data.count;
-	gAtr_Buy_Pass			= 1;		-- - first pass
-	
-	Atr_Buy_Confirm_ItemName:SetText (gAtr_Buy_ItemName.." x"..gAtr_Buy_StackSize);
-	Atr_Buy_Confirm_Numstacks:SetNumber (1);
-	Atr_Buy_Confirm_Max_Text:SetText (ZT("max")..": "..gAtr_Buy_MaxCanBuy);
-	
-	Atr_Buy_Part1:Show();
-	Atr_Buy_Part2:Hide();
-	
-	Atr_Buy_Confirm_OKBut:SetText (ZT("Buy"))
-	Atr_Buy_Confirm_OKBut:Disable();
-	Atr_Buy_Confirm_Frame:Show();
-
-	if (scan.searchWasExact and data.minpage ~= nil) then
-		Atr_Buy_QueueQuery(data.minpage);
-	else
-		Atr_Buy_QueueQuery(0);
-	end
-
+	Atr_Buy_ResetSession();
+	Atr_Buy_ShowCurrentSelection();
 
 end
 
@@ -133,6 +356,10 @@ local prevBuyState;
 
 function Atr_Buy_Idle ()
 
+	if (gAtr_Buy_PendingBuy and time() - gAtr_Buy_PendingBuy.when > 5) then
+		Atr_Buy_ClearPendingBuy();
+	end
+
 	if (Atr_BuyState ~= prevBuyState) then
 		prevBuyState = Atr_BuyState;
 --		Atr_Buy_Debug1 (true);
@@ -154,9 +381,17 @@ function Atr_Buy_Idle ()
 
 --		zc.msg_pink ("ATR_BUY_JUST_BOUGHT: ",  time() - gAtr_Buy_Waiting_Start);
 
-		local queueIf = (time() - gAtr_Buy_Waiting_Start > 2);		-- wait a few seconds for Auction List to Update after buys
+		local queueIf = (time() - gAtr_Buy_Waiting_Start > ATR_BUY_POST_BUY_DELAY);		-- wait a few seconds for Auction List to Update after buys
 		
-		Atr_Buy_NextPage_Or_Cancel (queueIf);
+		if (queueIf) then
+			if (Atr_Buy_IsComplete()) then
+				if (not Atr_Buy_ChainContinue()) then
+					Atr_Buy_Cancel();
+				end
+			else
+				Atr_Buy_QueueQuery(gAtr_Buy_CurPage);
+			end
+		end
 		
 	end
 
@@ -180,6 +415,7 @@ end
 function Atr_Buy_CheckForMatches ()
 
 	Atr_BuyState = ATR_BUY_PROCESSING_QUERY_RESULTS;
+	Atr_Buy_ClearPendingBuy();
 	
 	if (gAtr_Buy_Query:CheckForDuplicatePage(gAtr_Buy_CurPage)) then
 		Atr_Buy_QueueQuery (gAtr_Buy_CurPage);
@@ -192,13 +428,15 @@ function Atr_Buy_CheckForMatches ()
 	
 	if (numMatches > 0) then		-- update the confirmation screen
 	
-		Atr_Buy_Confirm_OKBut:Enable();
-
 		if (gAtr_Buy_NumUserWants ~= -1) then		
 			Atr_Buy_Continue_Text:SetText (string.format (ZT("%d of %d bought so far"), gAtr_Buy_NumBought, gAtr_Buy_NumUserWants));
 			Atr_Buy_Part1:Hide();
 			Atr_Buy_Part2:Show();
 			Atr_Buy_Confirm_OKBut:SetText (ZT("Continue"))
+			Atr_Buy_Confirm_OKBut:Disable();
+			Atr_Buy_BuyNextMatch();
+		else
+			Atr_Buy_Confirm_OKBut:Enable();
 		end
 
 	else
@@ -212,6 +450,34 @@ end
 
 function Atr_Buy_BuyMatches ()
 	return Atr_Buy_CountMatches (true);
+end
+
+-----------------------------------------
+
+function Atr_Buy_BuyNextMatch ()
+
+	if (GetMoney() < gAtr_Buy_BuyoutPrice) then
+		Atr_Buy_Cancel (ZT("You do not have enough gold\n\nto make any more purchases."));
+		return;
+	end
+
+	local _, numJustBought = Atr_Buy_BuyMatches ();
+
+	if (numJustBought > 0) then
+
+--zc.msg (numJustBought, " from page ", gAtr_Buy_CurPage);
+	
+		Atr_Buy_TrackPendingBuy(numJustBought);
+		gAtr_Buy_Session_NumBought = gAtr_Buy_Session_NumBought + (numJustBought * gAtr_Buy_PendingBuy.itemsPerAuction);
+		gAtr_Buy_Session_TotalSpent = gAtr_Buy_Session_TotalSpent + (numJustBought * gAtr_Buy_PendingBuy.spentPerAuction);
+		AuctionatorSubtractFromScan (gAtr_Buy_ItemName, gAtr_Buy_StackSize, gAtr_Buy_BuyoutPrice, numJustBought);
+		Atr_BuyState = ATR_BUY_JUST_BOUGHT;
+		gAtr_Buy_Waiting_Start = time();
+		Atr_Buy_ShowLoadingState();
+	else
+		Atr_Buy_NextPage_Or_Cancel();
+	end
+	
 end
 
 -----------------------------------------
@@ -272,8 +538,10 @@ end
 function Atr_Buy_NextPage_Or_Cancel ( queueIf )
 
 	if (Atr_Buy_IsComplete()) then
-	
-		Atr_Buy_Cancel();
+
+		if (not Atr_Buy_ChainContinue()) then
+			Atr_Buy_Cancel();
+		end
 		
 	elseif (queueIf == nil or queueIf == true) then
 	
@@ -330,19 +598,7 @@ function Atr_Buy_Confirm_OK ()
 		gAtr_Buy_NumUserWants = numToBuy;
 	end
 	
-	local _, numJustBought = Atr_Buy_BuyMatches ();
-
-	if (numJustBought > 0) then
-
---zc.msg (numJustBought, " from page ", gAtr_Buy_CurPage);
-	
-		AuctionatorSubtractFromScan (gAtr_Buy_ItemName, gAtr_Buy_StackSize, gAtr_Buy_BuyoutPrice, gAtr_Buy_NumBought);
-		Atr_BuyState = ATR_BUY_JUST_BOUGHT;
-		gAtr_Buy_Waiting_Start = time();
-		Atr_Buy_Confirm_OKBut:Disable();
-	else
-		Atr_Buy_NextPage_Or_Cancel();
-	end
+	Atr_Buy_BuyNextMatch();
 	
 end
 

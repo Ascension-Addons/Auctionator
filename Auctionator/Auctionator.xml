@@ -998,6 +998,23 @@
 		<Anchors><Anchor point="TOPLEFT"><Offset><AbsDimension x="270" y="-290"/></Offset></Anchor></Anchors>
 
 		<Scripts>
+			<OnLoad>
+				self:SetMovable(true);
+				self:RegisterForDrag("LeftButton");
+				self:SetBackdropColor(0.03, 0.03, 0.03, 0.55);
+				self:SetBackdropBorderColor(1.0, 0.72, 0.18, 0.95);
+			</OnLoad>
+			<OnShow>
+				Atr_Mask:Hide();
+				self:SetBackdropColor(0.03, 0.03, 0.03, 0.55);
+				self:SetBackdropBorderColor(1.0, 0.72, 0.18, 0.95);
+			</OnShow>
+			<OnDragStart>
+				self:StartMoving();
+			</OnDragStart>
+			<OnDragStop>
+				self:StopMovingOrSizing();
+			</OnDragStop>
 			<OnUpdate>
 				Atr_Buy_Confirm_Update();
 			</OnUpdate>
@@ -1008,10 +1025,49 @@
 				<FontString name="Atr_Buy_Confirm_ItemName" inherits="GameFontNormal">
 					<Anchors><Anchor point="TOPLEFT"><Offset><AbsDimension x="40" y="-34"/></Offset></Anchor></Anchors>
 				</FontString>
+				<FontString name="Atr_Buy_Session_Text" inherits="GameFontNormalSmall" justifyH="CENTER">
+					<Size><AbsDimension x="330" y="16"/></Size>
+					<Anchors><Anchor point="TOP"><Offset><AbsDimension x="0" y="-108"/></Offset></Anchor></Anchors>
+				</FontString>
 			</Layer>
 		</Layers>
 
 		<Frames>
+			<Frame name="Atr_Buy_Header_Frame" parent="Atr_Buy_Confirm_Frame" enableMouse="true">
+				<Size><AbsDimension x="240" y="34"/></Size>
+				<Anchors><Anchor point="BOTTOM" relativePoint="TOP"><Offset><AbsDimension x="0" y="-2"/></Offset></Anchor></Anchors>
+				<Backdrop bgFile="Interface\Tooltips\UI-Tooltip-Background" edgeFile="Interface\Tooltips\UI-Tooltip-Border" tile="true">
+					<BackgroundInsets><AbsInset left="4" right="4" top="4" bottom="4"/></BackgroundInsets>
+					<TileSize><AbsValue val="16"/></TileSize>
+					<EdgeSize><AbsValue val="16"/></EdgeSize>
+				</Backdrop>
+				<Scripts>
+					<OnLoad>
+						self:SetBackdropColor(0.07, 0.05, 0.015, 0.88);
+						self:SetBackdropBorderColor(1.0, 0.72, 0.18, 1.0);
+						self:RegisterForDrag("LeftButton");
+					</OnLoad>
+					<OnShow>
+						self:SetBackdropColor(0.07, 0.05, 0.015, 0.88);
+						self:SetBackdropBorderColor(1.0, 0.72, 0.18, 1.0);
+					</OnShow>
+					<OnDragStart>
+						Atr_Buy_Confirm_Frame:StartMoving();
+					</OnDragStart>
+					<OnDragStop>
+						Atr_Buy_Confirm_Frame:StopMovingOrSizing();
+					</OnDragStop>
+				</Scripts>
+				<Layers>
+					<Layer level="ARTWORK">
+						<FontString name="Atr_Buy_Header_Text" inherits="GameFontNormalLarge" justifyH="CENTER" text="|TInterface\MoneyFrame\UI-GoldIcon:14:14:0:0|t  Auctionator  |TInterface\MoneyFrame\UI-GoldIcon:14:14:0:0|t">
+							<Size><AbsDimension x="220" y="20"/></Size>
+							<Anchors><Anchor point="CENTER"><Offset><AbsDimension x="0" y="0"/></Offset></Anchor></Anchors>
+							<Color r="1.0" g="0.82" b="0.25"/>
+						</FontString>
+					</Layer>
+				</Layers>
+			</Frame>
 
 			<Frame name="Atr_Buy_Part1">
 				<Anchors>
@@ -1079,6 +1135,22 @@
 					</OnClick>
 				</Scripts>
 			</Button>
+
+			<CheckButton name="Atr_Buy_Chain_CB" inherits="UICheckButtonTemplate">
+				<Size><AbsDimension x="26" y="26"/></Size>
+				<Anchors><Anchor point="BOTTOMLEFT"><Offset><AbsDimension x="90" y="21"/></Offset></Anchor></Anchors>
+				<Layers>
+					<Layer level="BACKGROUND">
+						<FontString name="Atr_Buy_Chain_Text" inherits="GameFontNormalSmall" text="Chain buy">
+							<Anchors>
+								<Anchor point="LEFT" relativePoint="RIGHT" relativeTo="Atr_Buy_Chain_CB">
+									<Offset><AbsDimension x="4" y="1"/></Offset>
+								</Anchor>
+							</Anchors>
+						</FontString>
+					</Layer>
+				</Layers>
+			</CheckButton>
 
 			<Button name="Atr_Buy_Confirm_OKBut" inherits="UIPanelButtonTemplate" text="Buy">
 				<Size><AbsDimension x="80" y="22"/></Size>
